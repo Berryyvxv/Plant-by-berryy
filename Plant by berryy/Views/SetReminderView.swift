@@ -3,7 +3,7 @@ import SwiftUI
 struct SetReminderView: View {
     @Environment(\.dismiss) private var dismiss
 
-    // Called with the new plant when the user taps the checkmark
+    
     let onSave: (Plant) -> Void
 
     // Form values live only inside this sheet until the checkmark is tapped,
@@ -12,7 +12,7 @@ struct SetReminderView: View {
     @State private var room: Room = .bedroom
     @State private var light: Light = .fullSun
     @State private var waterAmount: WaterAmount = .small
-    @State private var wateringDays = Set(Weekday.allCases)
+    @State private var wateringFrequency: WateringFrequency = .everyDay
     @State private var showNameError = false
 
     private let accent = Color(red: 0.18, green: 0.5, blue: 0.38)
@@ -20,7 +20,7 @@ struct SetReminderView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 28) {
                     nameSection
                     roomAndLightSection
                     wateringSection
@@ -28,7 +28,9 @@ struct SetReminderView: View {
                 .padding()
             }
             .navigationTitle("Set Reminder")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", systemImage: "xmark") { dismiss() }
@@ -64,70 +66,59 @@ struct SetReminderView: View {
 
     private var roomAndLightSection: some View {
         VStack(spacing: 12) {
-            Picker(selection: $room) {
-                ForEach(Room.allCases) { Text($0.rawValue).tag($0) }
-            } label: {
+            HStack {
                 Label("Room", systemImage: "location")
+                Spacer()
+                Picker("Room", selection: $room) {
+                    ForEach(Room.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .labelsHidden()
             }
 
             Divider()
 
-            Picker(selection: $light) {
-                ForEach(Light.allCases) { Text($0.rawValue).tag($0) }
-            } label: {
+            HStack {
                 Label("Light", systemImage: "sun.max")
+                Spacer()
+                Picker("Light", selection: $light) {
+                    ForEach(Light.allCases) { Label($0.rawValue, systemImage: $0.icon).tag($0) }
+                }
+                .labelsHidden()
             }
         }
         .pickerStyle(.menu)
+        .tint(.secondary)
         .padding()
         .background(.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
     }
 
     private var wateringSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Watering Days", systemImage: "drop")
-
-            HStack(spacing: 0) {
-                ForEach(Weekday.allCases) { day in
-                    dayButton(day)
+            HStack {
+                Label("Watering Days", systemImage: "drop")
+                Spacer()
+                Picker("Watering Days", selection: $wateringFrequency) {
+                    ForEach(WateringFrequency.allCases) { Text($0.title).tag($0) }
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
             }
 
             Divider()
 
-            Picker(selection: $waterAmount) {
-                ForEach(WaterAmount.allCases) { Text($0.rawValue).tag($0) }
-            } label: {
+            HStack {
                 Label("Water", systemImage: "drop")
+                Spacer()
+                Picker("Water", selection: $waterAmount) {
+                    ForEach(WaterAmount.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
             }
-            .pickerStyle(.menu)
         }
+        .tint(.secondary)
         .padding()
         .background(.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
-    }
-
-    // One round button per weekday; tapping it adds or removes the day
-    private func dayButton(_ day: Weekday) -> some View {
-        let isOn = wateringDays.contains(day)
-
-        return Button {
-            if isOn {
-                wateringDays.remove(day)
-            } else {
-                wateringDays.insert(day)
-            }
-        } label: {
-            // Weekday's raw value (Sunday = 1) lines up with Calendar's symbol lists
-            Text(Calendar.current.veryShortWeekdaySymbols[day.rawValue - 1])
-                .font(.subheadline.bold())
-                .foregroundStyle(isOn ? .white : .primary)
-                .frame(width: 36, height: 36)
-                .background(isOn ? accent : .primary.opacity(0.1), in: Circle())
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Calendar.current.weekdaySymbols[day.rawValue - 1])
-        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     // MARK: - Actions
@@ -145,7 +136,7 @@ struct SetReminderView: View {
             room: room,
             light: light,
             waterAmount: waterAmount,
-            wateringDays: wateringDays
+            wateringFrequency: wateringFrequency
         ))
         dismiss()
     }
