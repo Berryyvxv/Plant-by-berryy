@@ -6,8 +6,7 @@ struct SetReminderView: View {
     
     let onSave: (Plant) -> Void
 
-    // Form values live only inside this sheet until the checkmark is tapped,
-    // so tapping the X throws them away automatically
+
     @State private var name = ""
     @State private var room: Room = .bedroom
     @State private var light: Light = .fullSun
