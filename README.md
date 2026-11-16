@@ -143,6 +143,7 @@ Plant by berryy/
     ├── ContentView.swift          Main page, owns the ViewModel and all sheet and dialog state
     ├── EmptyStateView.swift       Shown when there are no plants
     ├── PlantRowView.swift         One list row: check circle, room, name, chips
+    ├── SwipeToDeleteRow.swift     Row wrapper: slide left to reveal the red trash pill
     ├── SetReminderView.swift      Add AND edit form (edit mode adds the Delete button)
     └── PlantColors.swift          Light and dark color palette
 ```
@@ -157,6 +158,7 @@ Plant by berryy/
 | `ContentView.swift` | Creates the ViewModel, chooses between the empty state and the list, owns `plantToEdit`, `plantToDelete` and `showingSetReminder`, and presents the sheets and the delete confirmation. |
 | `SetReminderView.swift` | The form. Edits a **copy** of the plant in local `@State`, then hands the result up through `onSave` and `onDelete`. |
 | `PlantRowView.swift` | Renders one plant and reports the check-circle tap through `onToggleWatered`. |
+| `SwipeToDeleteRow.swift` | Wraps a row. A horizontal drag slides it left and reveals a 62 x 45 red trash pill. Tapping the pill calls `onDelete`. It never deletes anything itself. |
 | `EmptyStateView.swift` | Renders the empty screen and reports the button tap through `onAddTapped`. |
 | `PlantColors.swift` | The colors, each with a light and a dark value. |
 
@@ -387,8 +389,8 @@ sequenceDiagram
 
 | Step | File | What happens |
 |---|---|---|
-| 1 | `ContentView` | `.swipeActions(allowsFullSwipe: false)` shows an icon-only red trash. Full swipe is disabled so a long swipe can never delete without confirmation. |
-| 2 | `ContentView` | Tapping the trash only sets `plantToDelete = plant`. **It does not delete.** |
+| 1 | `SwipeToDeleteRow` | A leftward drag slides the row and reveals the red trash pill. Release past halfway and it snaps open, otherwise it snaps closed. Mostly vertical drags are ignored, so the List still scrolls. There is no full swipe, so a long swipe can never delete without confirmation. |
+| 2 | `ContentView` | Tapping the trash calls the row's `onDelete`, which only sets `plantToDelete = plant`. **It does not delete.** |
 | 3 | `ContentView` | `confirmationDialog(presenting: plantToDelete)` shows the plant's name with a red Delete button and a system Cancel. |
 | 4 | `ContentView` | Confirming calls `viewModel.delete(plant)`. Cancelling clears `plantToDelete`. |
 | 5 | `PlantsViewModel.delete` | `plants.removeAll { $0.id == plant.id }`, then `persist()`. |
@@ -507,6 +509,8 @@ Example content after adding one plant:
 
 **Why ask for permission when the first plant is added?** A prompt that appears at the moment the user creates a reminder is easy to understand. A prompt at first launch, before the user has done anything, is more likely to be refused.
 
+**Why a hand-built swipe instead of SwiftUI's `swipeActions`?** The system draws an icon-only swipe action as a 50 x 50 circle and does not allow changing its size or shape. The design calls for a 62 x 45 capsule, so `SwipeToDeleteRow` builds the swipe with a `DragGesture`. It is attached with `simultaneousGesture` so the List can still scroll, and it adds a VoiceOver "Delete" action to replace the system swipe action.
+
 **Why Liquid Glass on only two buttons?** Liquid Glass is meant for controls that float above content, so the floating add button and the empty-screen button use `glassEffect`. The rows, chips and progress bar are content and stay flat. Apple also advises limiting how many glass effects are on screen at once.
 
 ---
@@ -519,5 +523,6 @@ Example content after adding one plant:
 - **Reminders count from the last change, not from a due date.** `wateringFrequency` sets the reminder interval, but the app does not yet show which plants are overdue. "Watered today" only checks whether `lastWateredDate` is today.
 - **Denied permission means no reminders.** If the user taps Don't Allow, nothing is scheduled. They can turn notifications on later in iOS Settings, and the launch check will schedule the missing reminders.
 - **iOS keeps at most 64 pending local notifications** per app. One per plant is fine for a normal collection, but a very large one would need a different scheme.
+- **The swipe is custom, not the system one.** It has no haptic feedback and only a small overshoot instead of the system's rubber-band effect. Each row tracks its own state, so opening a second row does not close the first.
 - **Notification wording is fixed** ("Planto" / "Hey! let's water your plant") and does not say which plant.
 - **Single file with whole-array writes:** fine at this scale. A watering *history* (one entry per watering) would be the point to move to SwiftData.
