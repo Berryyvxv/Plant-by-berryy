@@ -1,4 +1,4 @@
-# Plant by berryy 🌱
+# Planto 🌱
 
 **Plant by berryy** is an iOS app for keeping track of your houseplants. Save each plant with its room, light and watering needs, then tick it off every day when you've watered it.
 
