@@ -22,6 +22,9 @@ enum PlantColors {
     static let waterChipText = Color(light: 0x1A7A8C, dark: 0xCAF3FB)
 
     static let addButton = Color(light: 0x28745D, dark: 0x28745D)
+
+    // The system red in each appearance; the dark value is the one sampled from the design
+    static let deleteButton = Color(light: 0xFF383C, dark: 0xFF4245)
 }
 
 private extension Color {

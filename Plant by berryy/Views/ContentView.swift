@@ -27,23 +27,15 @@ struct ContentView: View {
                 progressHeader
 
                 List(viewModel.plants) { plant in
-                    PlantRowView(plant: plant) { viewModel.toggleWatered(plant) }
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .contentShape(Rectangle())
-                        .onTapGesture { plantToEdit = plant }
-                        // No full swipe: the user must tap the trash, which asks for confirmation
-                        .swipeActions(allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                plantToDelete = plant
-                            } label: {
-                                // Icon only, like the design; the label is still read by VoiceOver
-                                Label("Delete", systemImage: "trash")
-                                    .labelStyle(.iconOnly)
-                            }
-                            .tint(.red)
-                        }
+                    // Swiping left reveals the trash pill; tapping it asks for confirmation
+                    SwipeToDeleteRow(onDelete: { plantToDelete = plant }) {
+                        PlantRowView(plant: plant) { viewModel.toggleWatered(plant) }
+                            .contentShape(Rectangle())
+                            .onTapGesture { plantToEdit = plant }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
