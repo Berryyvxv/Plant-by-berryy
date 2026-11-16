@@ -1,6 +1,6 @@
 import Foundation
 
-enum Room: String, CaseIterable, Identifiable {
+enum Room: String, CaseIterable, Identifiable, Codable {
     case bedroom = "Bedroom"
     case livingRoom = "Living Room"
     case kitchen = "Kitchen"
@@ -10,7 +10,7 @@ enum Room: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum Light: String, CaseIterable, Identifiable {
+enum Light: String, CaseIterable, Identifiable, Codable {
     case fullSun = "Full Sun"
     case partialSun = "Partial Sun"
     case lowLight = "Low Light"
@@ -26,7 +26,7 @@ enum Light: String, CaseIterable, Identifiable {
     }
 }
 
-enum WaterAmount: String, CaseIterable, Identifiable {
+enum WaterAmount: String, CaseIterable, Identifiable, Codable {
     case small = "20-50 ml"
     case medium = "50-100 ml"
     case large = "100-200 ml"
@@ -36,7 +36,7 @@ enum WaterAmount: String, CaseIterable, Identifiable {
 }
 
 // Raw value = number of days between waterings
-enum WateringFrequency: Int, CaseIterable, Identifiable {
+enum WateringFrequency: Int, CaseIterable, Identifiable, Codable {
     case everyDay = 1
     case every2Days = 2
     case every3Days = 3
@@ -58,7 +58,7 @@ enum WateringFrequency: Int, CaseIterable, Identifiable {
     }
 }
 
-struct Plant: Identifiable {
+struct Plant: Identifiable, Codable {
     let id: UUID
     var name: String
     var room: Room

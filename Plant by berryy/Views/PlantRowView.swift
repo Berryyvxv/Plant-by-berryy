@@ -9,19 +9,33 @@ struct PlantRowView: View {
     var body: some View {
         HStack(spacing: 24) {
             Button(action: onToggleWatered) {
-                checkCircle
+                // Empty ring when not watered, filled green check when watered today
+                if plant.isWatered {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.black, PlantColors.checkedCircle)
+                        .frame(width: 28, height: 28)
+                } else {
+                    Circle()
+                        .strokeBorder(PlantColors.uncheckedCircle, lineWidth: 1.2)
+                        .frame(width: 23, height: 23)
+                        .frame(width: 28, height: 28)
+                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(plant.isWatered ? "Watered today" : "Mark as watered")
 
             VStack(alignment: .leading, spacing: 6) {
-                Label("in \(plant.room.rawValue)", systemImage: "location")
-                    .font(.system(size: 14))
-                    .foregroundStyle(PlantColors.locationText)
+                HStack(spacing: 6) {
+                    Image(systemName: "location")
+                    Text("in \(plant.room.rawValue)")
+                }
+                .font(.system(size: 14))
+                .foregroundStyle(PlantColors.locationText)
 
                 Text(plant.name)
                     .font(.system(size: 24))
-                    .foregroundStyle(plant.isWatered ? PlantColors.wateredName : .white)
+                    .foregroundStyle(plant.isWatered ? PlantColors.wateredName : .primary)
 
                 HStack(spacing: 8) {
                     chip(plant.light.rawValue, systemImage: plant.light.icon, color: PlantColors.lightChipText)
@@ -40,29 +54,16 @@ struct PlantRowView: View {
         }
     }
 
-    // Empty ring when not watered, filled green check when watered today
-    @ViewBuilder
-    private var checkCircle: some View {
-        if plant.isWatered {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 26))
-                .foregroundStyle(.black, PlantColors.checkedCircle)
-                .frame(width: 28, height: 28)
-        } else {
-            Circle()
-                .strokeBorder(PlantColors.uncheckedCircle, lineWidth: 1.2)
-                .frame(width: 23, height: 23)
-                .frame(width: 28, height: 28)
-        }
-    }
-
     private func chip(_ text: String, systemImage: String, color: Color) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(color)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(PlantColors.chipBackground, in: RoundedRectangle(cornerRadius: 8))
+        HStack(spacing: 5) {
+            Image(systemName: systemImage)
+            Text(text)
+        }
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(PlantColors.chipBackground, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

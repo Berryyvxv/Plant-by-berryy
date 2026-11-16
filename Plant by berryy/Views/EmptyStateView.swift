@@ -35,8 +35,8 @@ struct EmptyStateView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: 280)
                     .padding(.vertical, 12)
-                    .background(accent, in: Capsule())
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                    // Liquid Glass capsule (the default shape) tinted green, reacting to touch
+                    .glassEffect(.regular.tint(accent).interactive())
             }
             .buttonStyle(.plain)
 

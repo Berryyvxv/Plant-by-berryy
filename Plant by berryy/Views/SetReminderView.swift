@@ -3,18 +3,33 @@ import SwiftUI
 struct SetReminderView: View {
     @Environment(\.dismiss) private var dismiss
 
-    
+    // nil = adding a new plant, otherwise editing this one
+    let plant: Plant?
     let onSave: (Plant) -> Void
+    // Only passed when editing; its presence shows the Delete button
+    let onDelete: (() -> Void)?
 
-
-    @State private var name = ""
-    @State private var room: Room = .bedroom
-    @State private var light: Light = .fullSun
-    @State private var waterAmount: WaterAmount = .small
-    @State private var wateringFrequency: WateringFrequency = .everyDay
+    @State private var name: String
+    @State private var room: Room
+    @State private var light: Light
+    @State private var waterAmount: WaterAmount
+    @State private var wateringFrequency: WateringFrequency
     @State private var showNameError = false
+    @State private var showDeleteConfirmation = false
 
     private let accent = Color(red: 0.18, green: 0.5, blue: 0.38)
+
+    // The fields start from the plant's current values, so the sheet edits a copy
+    init(plant: Plant? = nil, onSave: @escaping (Plant) -> Void, onDelete: (() -> Void)? = nil) {
+        self.plant = plant
+        self.onSave = onSave
+        self.onDelete = onDelete
+        _name = State(initialValue: plant?.name ?? "")
+        _room = State(initialValue: plant?.room ?? .bedroom)
+        _light = State(initialValue: plant?.light ?? .fullSun)
+        _waterAmount = State(initialValue: plant?.waterAmount ?? .small)
+        _wateringFrequency = State(initialValue: plant?.wateringFrequency ?? .everyDay)
+    }
 
     var body: some View {
         NavigationStack {
@@ -23,6 +38,10 @@ struct SetReminderView: View {
                     nameSection
                     roomAndLightSection
                     wateringSection
+
+                    if onDelete != nil {
+                        deleteButton
+                    }
                 }
                 .padding()
             }
@@ -120,6 +139,26 @@ struct SetReminderView: View {
         .background(.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
     }
 
+    private var deleteButton: some View {
+        Button("Delete Reminder", role: .destructive) {
+            showDeleteConfirmation = true
+        }
+        .foregroundStyle(.red)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(.primary.opacity(0.08), in: Capsule())
+        .padding(.horizontal, 8)
+        .padding(.top, 20)
+        .confirmationDialog("Delete \(plant?.name ?? "this plant")?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                onDelete?()
+                dismiss()
+            }
+        } message: {
+            Text("Are you certain you want to delete ?")
+        }
+    }
+
     // MARK: - Actions
 
     private func save() {
@@ -130,12 +169,15 @@ struct SetReminderView: View {
             return
         }
 
+        // Keep the id and watering date when editing, so the plant stays the same plant
         onSave(Plant(
+            id: plant?.id ?? UUID(),
             name: trimmedName,
             room: room,
             light: light,
             waterAmount: waterAmount,
-            wateringFrequency: wateringFrequency
+            wateringFrequency: wateringFrequency,
+            lastWateredDate: plant?.lastWateredDate
         ))
         dismiss()
     }

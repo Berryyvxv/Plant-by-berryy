@@ -16,7 +16,9 @@ struct PlantStore {
 
     // No file yet means first launch, so there are simply no plants
     func load() throws -> [Plant] {
-        guard FileManager.default.fileExists(atPath: fileURL.path()) else { return [] }
+        // percentEncoded: false, otherwise "Application Support" becomes "Application%20Support"
+        // and fileExists wrongly reports that the file is missing
+        guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else { return [] }
         let data = try Data(contentsOf: fileURL)
         return try JSONDecoder().decode([Plant].self, from: data)
     }
