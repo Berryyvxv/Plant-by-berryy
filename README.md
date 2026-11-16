@@ -14,6 +14,7 @@ What users can do in the current build:
 - **Track daily progress.** A progress bar and a message show how many of your plants you've watered today.
 - **Edit a plant.** Tap any plant to change its details.
 - **Delete a plant.** Swipe left and tap the trash, or use "Delete Reminder" in the edit screen. The app always asks for confirmation first.
+- **Get watering reminders.** Each plant sends a notification ("Hey! let's water your plant") every time its watering interval passes. Watering a plant restarts its countdown.
 - **Keep your plants between launches.** Plants are saved on the device, so they're still there when you reopen the app.
 - **Use light or dark mode.** The app follows your phone's appearance setting.
 - **Get a friendly empty screen.** When there are no plants yet, the app invites you to add your first one.
@@ -38,7 +39,8 @@ Choices available when adding or editing a plant:
 | Observation (`@Observable`) | Updating the screen automatically when the data changes |
 | Codable and JSON | Converting plants to and from a saved format |
 | FileManager | Reading and writing the `plants.json` file on the device |
-| OSLog | Logging load and save errors |
+| UserNotifications | Local notifications that remind the user to water a plant |
+| OSLog | Logging load, save and scheduling errors |
 | Liquid Glass (`glassEffect`) | The floating add button and the empty-screen button |
 | Xcode | Building and previewing, targeting iOS 27 |
 
@@ -59,9 +61,10 @@ The rest of this document explains how the app is built with **MVVM**, and exact
    - [Create: add a plant](#create-add-a-plant)
    - [Update: edit a plant and toggle watered](#update-edit-a-plant-and-toggle-watered)
    - [Delete: swipe or edit sheet](#delete-swipe-or-edit-sheet)
-6. [How data is stored](#how-data-is-stored)
-7. [Design decisions](#design-decisions)
-8. [Known limitations](#known-limitations)
+6. [Reminder notifications](#reminder-notifications)
+7. [How data is stored](#how-data-is-stored)
+8. [Design decisions](#design-decisions)
+9. [Known limitations](#known-limitations)
 
 ---
 
@@ -86,22 +89,26 @@ flowchart LR
 
     subgraph ServiceLayer[Service layer]
         PS[PlantStore]
+        NS[NotificationService]
     end
 
     D[(plants.json)]
+    UNC[iOS notification center]
 
     ViewLayer -->|user actions| PVM
     PVM -->|observed state| ViewLayer
     PVM -->|reads and changes| P
     PVM -->|load and save| PS
+    PVM -->|schedule and cancel reminders| NS
     PS -->|JSON encode and decode| D
+    NS -->|local notification requests| UNC
 ```
 
 **The rule that keeps it clean: data flows down, actions flow up.**
 
 - Views **display** state and **forward** user actions. They never touch the file or change the plants array.
 - The ViewModel **owns the truth** (`plants`) and decides what every action means.
-- The Service is the **only** code that knows plants are stored as JSON on disk.
+- The Services are the **only** code that know about the disk (`PlantStore`) and about iOS notifications (`NotificationService`).
 - The Model is plain data with no UI and no storage code.
 
 ---
@@ -113,7 +120,7 @@ flowchart LR
 | **Model** | Describes what a plant is, plus small rules about its own data (`isWatered`). | Foundation | Views, storage |
 | **View** | Draws state, captures taps and text input, forwards actions upward through closures. | ViewModel (`ContentView` only), Model | Files, JSON |
 | **ViewModel** | Holds the list of plants, applies add, update, delete and toggle, computes progress, triggers saving. | Model, Service | SwiftUI views |
-| **Service** | Reads and writes the plants file. | Model (`Codable`) | Views, ViewModel |
+| **Service** | Talks to the outside world: reads and writes the plants file (`PlantStore`) and schedules reminders with iOS (`NotificationService`). | Model (`Codable`) | Views, ViewModel |
 
 `PlantsViewModel` imports only `Foundation`, `Observation` and `OSLog`, not `SwiftUI`, so its logic can be tested without any UI.
 
@@ -130,7 +137,8 @@ Plant by berryy/
 ├── ViewModels/
 │   └── PlantsViewModel.swift      Source of truth for plants: add, update, delete, toggleWatered
 ├── Services/
-│   └── PlantStore.swift           JSON load and save in Application Support
+│   ├── PlantStore.swift           JSON load and save in Application Support
+│   └── NotificationService.swift  Permission, scheduling and cancelling of reminder notifications
 └── Views/
     ├── ContentView.swift          Main page, owns the ViewModel and all sheet and dialog state
     ├── EmptyStateView.swift       Shown when there are no plants
@@ -143,8 +151,9 @@ Plant by berryy/
 |---|---|
 | `PlantsApp.swift` | Launching the app and presenting `ContentView`. |
 | `Plant.swift` | The shape of the data and how it is encoded (`Codable`). `isWatered` is true when `lastWateredDate` is today. |
-| `PlantsViewModel.swift` | **All CRUD logic.** The only code that changes `plants`. Calls `persist()` after every change. |
+| `PlantsViewModel.swift` | **All CRUD logic.** The only code that changes `plants`. Calls `persist()` after every change and keeps each plant's reminder in step with it. |
 | `PlantStore.swift` | **All disk access.** `load()` returns `[Plant]`, `save(_:)` writes them atomically. |
+| `NotificationService.swift` | **All notification access.** Asks for permission, schedules one repeating reminder per plant, cancels it, and lets banners show while the app is open. |
 | `ContentView.swift` | Creates the ViewModel, chooses between the empty state and the list, owns `plantToEdit`, `plantToDelete` and `showingSetReminder`, and presents the sheets and the delete confirmation. |
 | `SetReminderView.swift` | The form. Edits a **copy** of the plant in local `@State`, then hands the result up through `onSave` and `onDelete`. |
 | `PlantRowView.swift` | Renders one plant and reports the check-circle tap through `onToggleWatered`. |
@@ -387,6 +396,65 @@ sequenceDiagram
 
 ---
 
+## Reminder notifications
+
+Each plant gets one reminder that shows on the lock screen and in Notification Center:
+
+> **Planto**
+> Hey! let's water your plant
+
+### Local notifications, not remote push
+
+These are **local notifications**. The app asks iOS to show them at a future time, and iOS does so even when the app is closed. There is no server involved. A *remote* push notification would need a server, Apple's push service (APNs), certificates and a device token, none of which this app needs because it already knows when each plant is due.
+
+### How it works
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant VM as PlantsViewModel
+    participant NS as NotificationService
+    participant UNC as iOS notification center
+
+    User->>VM: Add, edit or water a plant
+    VM->>NS: scheduleReminder for the plant
+    NS->>UNC: What is the permission status
+    alt Not asked yet
+        NS->>User: iOS shows the permission prompt
+        User-->>NS: Allow or Don't Allow
+    end
+    alt Permission granted
+        NS->>UNC: Add a repeating request with the plant id as its identifier
+        Note over UNC: A request with the same id replaces the old one
+    else Permission denied
+        Note over NS: Nothing is scheduled
+    end
+    Note over UNC: After one watering interval iOS shows the banner, even if the app is closed
+    UNC->>User: Planto - Hey! let's water your plant
+```
+
+1. **Permission.** iOS only allows notifications if the user agrees. `requestAuthorizationIfNeeded()` asks the **first time a reminder is scheduled** (when the first plant is added), not at launch, so the prompt appears when it makes sense. After that it only reads the answer.
+2. **Content.** `UNMutableNotificationContent` holds the title ("Planto"), the body and the sound.
+3. **Trigger.** A `UNTimeIntervalNotificationTrigger` with `repeats: true` fires every N days, where N is the plant's `wateringFrequency.rawValue`. The first banner arrives one full interval after the reminder was scheduled.
+4. **Identifier.** The request uses the plant's `UUID` as its identifier. That gives exactly one reminder per plant, and scheduling again simply **replaces** the old one.
+5. **Hand-off to iOS.** After `center.add(request)`, iOS owns the reminder. The app does not need to be running for it to fire.
+
+### What each CRUD action does to the reminder
+
+| Action | ViewModel method | Effect on the reminder |
+|---|---|---|
+| Create | `add` | Schedules a reminder. This is where the permission prompt appears the first time. |
+| Update | `update` | Reschedules, because the watering frequency may have changed. |
+| Toggle watered | `toggleWatered` | Reschedules, so the countdown restarts from the moment the plant was watered. It also clears an old banner from Notification Center. |
+| Delete | `delete` | Cancels the pending reminder and removes any delivered banner. |
+| App launch | `init` | Schedules a reminder only for plants that **don't have one yet** (for example plants saved before reminders existed). Existing reminders are never moved. |
+
+### While the app is open
+
+By default iOS hides notifications from an app that is on screen. `NotificationService` is the notification center's delegate, and its `willPresent` method returns `[.banner, .sound]`, so the banner still shows. The delegate must live for the whole app, which is why the service is a shared singleton (`NotificationService.shared`): the center keeps only a weak reference to its delegate.
+
+---
+
 ## How data is stored
 
 `PlantStore` writes one JSON file:
@@ -433,6 +501,12 @@ Example content after adding one plant:
 
 **Why `sheet(item:)` for editing?** The presented plant and the sheet's visibility are one value, so they can never disagree.
 
+**Why local notifications instead of remote push?** The app already knows when each plant is due, so it can schedule the reminder itself. That means no server, no Apple Push Notification service setup and no account system.
+
+**Why one reminder per plant, identified by the plant's `id`?** Re-scheduling the same id replaces the old request, so edits and waterings can never leave duplicate reminders behind.
+
+**Why ask for permission when the first plant is added?** A prompt that appears at the moment the user creates a reminder is easy to understand. A prompt at first launch, before the user has done anything, is more likely to be refused.
+
 **Why Liquid Glass on only two buttons?** Liquid Glass is meant for controls that float above content, so the floating add button and the empty-screen button use `glassEffect`. The rows, chips and progress bar are content and stay flat. Apple also advises limiting how many glass effects are on screen at once.
 
 ---
@@ -441,6 +515,9 @@ Example content after adding one plant:
 
 - **Corrupt file:** if `plants.json` cannot be decoded, the app logs the error and starts empty. The next save overwrites it.
 - **Enum raw values are persisted.** Renaming one (for example `"Full Sun"`) would stop old files from decoding. Add a separate display title instead of changing raw values.
-- **`wateringFrequency` is displayed but not yet used** to work out when a plant is due. "Watered today" only checks whether `lastWateredDate` is today.
-- **No reminders or notifications yet.**
+- **Reminders are not tied to a time of day.** The countdown starts when the reminder is scheduled, so a plant added at 3 pm is reminded at 3 pm. A time-of-day setting would need a field on `Plant` and a calendar trigger.
+- **Reminders count from the last change, not from a due date.** `wateringFrequency` sets the reminder interval, but the app does not yet show which plants are overdue. "Watered today" only checks whether `lastWateredDate` is today.
+- **Denied permission means no reminders.** If the user taps Don't Allow, nothing is scheduled. They can turn notifications on later in iOS Settings, and the launch check will schedule the missing reminders.
+- **iOS keeps at most 64 pending local notifications** per app. One per plant is fine for a normal collection, but a very large one would need a different scheme.
+- **Notification wording is fixed** ("Planto" / "Hey! let's water your plant") and does not say which plant.
 - **Single file with whole-array writes:** fine at this scale. A watering *history* (one entry per watering) would be the point to move to SwiftData.
